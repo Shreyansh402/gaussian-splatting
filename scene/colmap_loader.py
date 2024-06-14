@@ -12,6 +12,7 @@
 import numpy as np
 import collections
 import struct
+import json
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
@@ -240,7 +241,6 @@ def read_intrinsics_binary(path_to_model_file):
         assert len(cameras) == num_cameras
     return cameras
 
-
 def read_extrinsics_text(path):
     """
     Taken from https://github.com/colmap/colmap/blob/dev/scripts/python/read_write_model.py
@@ -292,3 +292,26 @@ def read_colmap_bin_array(path):
         array = np.fromfile(fid, np.float32)
     array = array.reshape((width, height, channels), order="F")
     return np.transpose(array, (1, 0, 2)).squeeze()
+
+def read_dust3r_json(path):
+    """
+    :param path: path to the dust3r output json file.
+    """
+    cameras={}
+    images={}
+    with open(path, "r") as fid:
+        data = json.load(fid)
+        for id in data.keys():
+            intrinsics = data[id]['intrinsics']
+            frames = data[id]['frames']
+            #depth_frame = data[id]['depth_frame']
+            cameras[int(id)] = Camera(id=int(id), model="PINHOLE",width=intrinsics['width'], height=intrinsics['height'],
+                                        params=np.array([intrinsics['fx'], intrinsics['fy'], intrinsics['cx'], intrinsics['cy']]))
+            images[int(id)] = Image(id=int(id), qvec=np.array([frames['extrinsics']['qw'], frames['extrinsics']['qx'], frames['extrinsics']['qy'], frames['extrinsics']['qz']]),
+                                    tvec=np.array([frames['extrinsics']['tx'], frames['extrinsics']['ty'], frames['extrinsics']['tz']]),
+                                    camera_id=int(id), 
+                                    name=frames['image_name'],
+                                    xys=np.array(intrinsics['xys']), point3D_ids=np.array(intrinsics['points3D_ID']),
+                                    )
+
+    return cameras, images
